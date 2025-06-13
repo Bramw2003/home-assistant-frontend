@@ -38,6 +38,7 @@ const cardConfigStruct = assign(
     aspect_ratio: optional(string()),
     alert_classes: optional(array(string())),
     sensor_classes: optional(array(string())),
+    toggle_domains: optional(array(string())),
   })
 );
 
@@ -57,7 +58,8 @@ export class HuiAreaCardEditor
       localize: LocalizeFunc,
       showCamera: boolean,
       binaryClasses: SelectOption[],
-      sensorClasses: SelectOption[]
+      sensorClasses: SelectOption[],
+      toggleDomains: SelectOption[]
     ) =>
       [
         { name: "area", selector: { area: {} } },
@@ -119,6 +121,17 @@ export class HuiAreaCardEditor
             },
           },
         },
+        {
+          name: "toggle_domains",
+          selector: {
+            select: {
+              reorder: true,
+              multiple: true,
+              custom_value: true,
+              options: toggleDomains,
+            },
+          },
+        },
       ] as const
   );
 
@@ -133,7 +146,7 @@ export class HuiAreaCardEditor
 
   private _classesForArea(
     area: string,
-    domain: "sensor" | "binary_sensor",
+    domain: "sensor" | "binary_sensor" | "light" | "switch",
     numericDeviceClasses?: string[] | undefined
   ): string[] {
     const entities = Object.values(this.hass!.entities).filter(
@@ -158,17 +171,17 @@ export class HuiAreaCardEditor
     return [...new Set(classes)];
   }
 
-  private _buildBinaryOptions = memoizeOne(
+  private _buildBinarySelectOptions = memoizeOne(
     (possibleClasses: string[], currentClasses: string[]): SelectOption[] =>
-      this._buildOptions("binary_sensor", possibleClasses, currentClasses)
+      this._buildSensorOptions("binary_sensor", possibleClasses, currentClasses)
   );
 
-  private _buildSensorOptions = memoizeOne(
+  private _buildSensorSelectOptions = memoizeOne(
     (possibleClasses: string[], currentClasses: string[]): SelectOption[] =>
-      this._buildOptions("sensor", possibleClasses, currentClasses)
+      this._buildSensorOptions("sensor", possibleClasses, currentClasses)
   );
 
-  private _buildOptions(
+  private _buildSensorOptions(
     domain: "sensor" | "binary_sensor",
     possibleClasses: string[],
     currentClasses: string[]
@@ -188,6 +201,29 @@ export class HuiAreaCardEditor
 
     return options;
   }
+
+  private _toggleDomains = memoizeOne(
+    (possibleDomains: string[], currentDomains: string[]): SelectOption[] => {
+      const options = [...new Set([...possibleDomains, ...currentDomains])].map(
+        (domain) => ({
+          value: domain,
+          label:
+            this.hass!.localize(
+              `ui.panel.lovelace.editor.card.area.toggle_domains.${domain}`
+            ) || domain,
+        })
+      );
+      options.sort((a, b) =>
+        caseInsensitiveStringCompare(
+          a.label,
+          b.label,
+          this.hass!.locale.language
+        )
+      );
+
+      return options;
+    }
+  );
 
   public setConfig(config: AreaCardConfig): void {
     assert(config, cardConfigStruct);
@@ -214,26 +250,33 @@ export class HuiAreaCardEditor
       this._config.area || "",
       this._numericDeviceClasses
     );
-    const binarySelectOptions = this._buildBinaryOptions(
+    const binarySelectOptions = this._buildBinarySelectOptions(
       possibleBinaryClasses,
       this._config.alert_classes || DEVICE_CLASSES.binary_sensor
     );
-    const sensorSelectOptions = this._buildSensorOptions(
+    const sensorSelectOptions = this._buildSensorSelectOptions(
       possibleSensorClasses,
       this._config.sensor_classes || DEVICE_CLASSES.sensor
+    );
+
+    const toggleDomainOptions = this._toggleDomains(
+      ["light", "switch", "fan"],
+      this._config.toggle_domains || []
     );
 
     const schema = this._schema(
       this.hass.localize,
       this._config.show_camera || false,
       binarySelectOptions,
-      sensorSelectOptions
+      sensorSelectOptions,
+      toggleDomainOptions
     );
 
     const data = {
       camera_view: "auto",
       alert_classes: DEVICE_CLASSES.binary_sensor,
       sensor_classes: DEVICE_CLASSES.sensor,
+      toggle_domains: this._config.toggle_domains ?? [],
       ...this._config,
     };
 

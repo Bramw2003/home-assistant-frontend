@@ -423,6 +423,15 @@ export class HuiAreaCard
 
     const ignoreAspectRatio = this.layout === "grid";
 
+    // Use config.toggle_domains if set, else fallback to default
+    const toggleDomains =
+      this._config?.toggle_domains === undefined
+        ? TOGGLE_DOMAINS
+        : this._config.toggle_domains;
+
+    // If no toggle domains are selected, show nothing for the buttons
+    const showToggleButtons = toggleDomains.length > 0;
+
     return html`
       <ha-card
         class=${imageClass ? "image" : ""}
@@ -487,26 +496,28 @@ export class HuiAreaCard
                 ? html`<div class="sensors">${sensors}</div>`
                 : ""}
             </div>
-            <div class="buttons">
-              ${TOGGLE_DOMAINS.map((domain) => {
-                if (!(domain in entitiesByDomain)) {
-                  return "";
-                }
-
-                const on = this._isOn(domain)!;
-                return TOGGLE_DOMAINS.includes(domain)
-                  ? html`
+            ${showToggleButtons
+              ? html`<div class="buttons">
+                  ${toggleDomains.map((domain) => {
+                    if (!(domain in entitiesByDomain)) {
+                      return "";
+                    }
+                    const on = this._isOn(domain)!;
+                    return html`
                       <ha-icon-button
                         class=${on ? "on" : "off"}
-                        .path=${DOMAIN_ICONS[domain][on ? "on" : "off"]}
+                        .path=${DOMAIN_ICONS[domain]?.[on ? "on" : "off"]}
                         .domain=${domain}
                         @click=${this._toggle}
+                        .title=${this.hass.localize(
+                          `ui.panel.lovelace.editor.card.area.toggle_domains.${domain}`
+                        ) || domain}
                       >
                       </ha-icon-button>
-                    `
-                  : "";
-              })}
-            </div>
+                    `;
+                  })}
+                </div>`
+              : nothing}
           </div>
         </div>
       </ha-card>
